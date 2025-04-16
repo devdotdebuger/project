@@ -1,83 +1,61 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import 'leaflet/dist/leaflet.css';
 
 const MapComponent = () => {
-  const [mapSettings, setMapSettings] = useState({
-    center: [21.1458, 79.0882],
-    zoom: 12,
-    bounds: null
-  });
-  const [landmarks, setLandmarks] = useState([]);
-  const [heatZones, setHeatZones] = useState([]);
+  const mapRef = useRef(null);
+  const defaultCenter = { lat: 21.1458, lng: 79.0882 };
 
   useEffect(() => {
-    async function initializeMap() {
-      // Get initial map settings
-      const { data: settings } = await supabase.rpc('get_initial_map_view');
-      if (settings) {
-        setMapSettings({
-          center: [settings.center_lat, settings.center_lng],
-          zoom: settings.zoom,
-          bounds: settings.default_bounds
-        });
-      }
+    // Load Google Maps Script
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places`;
+    script.async = true;
+    script.onload = initializeMap;
+    document.head.appendChild(script);
 
-      // Get landmarks
-      const { data: landmarkData } = await supabase.rpc('get_nagpur_landmarks');
-      if (landmarkData) {
-        setLandmarks(landmarkData);
-      }
-
-      // Get heat zones
-      const { data: zoneData } = await supabase.rpc('get_nagpur_heat_zones');
-      if (zoneData) {
-        setHeatZones(zoneData);
-      }
-    }
-
-    initializeMap();
+    return () => {
+      document.head.removeChild(script);
+    };
   }, []);
 
-  return (
-    <MapContainer
-      center={mapSettings.center}
-      zoom={mapSettings.zoom}
-      style={{ height: '100vh', width: '100%' }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      
-      {/* Render Landmarks */}
-      {landmarks.map(landmark => (
-        <Marker 
-          key={landmark.name}
-          position={[landmark.lat, landmark.lng]}
-        >
-          <Popup>
-            <h3>{landmark.name}</h3>
-            <p>Type: {landmark.type}</p>
-          </Popup>
-        </Marker>
-      ))}
+  const initializeMap = async () => {
+    const { data: settings } = await supabase.rpc('get_initial_map_view');
+    
+    const map = new window.google.maps.Map(mapRef.current, {
+      center: settings ? 
+        { lat: settings.center_lat, lng: settings.center_lng } : 
+        defaultCenter,
+      zoom: settings?.zoom || 12,
+      styles: [], // Add custom styles here if needed
+      mapTypeControl: true,
+      streetViewControl: true,
+      fullscreenControl: true
+    });
 
-      {/* Render Heat Zones */}
-      {heatZones.map(zone => (
-        <Marker
-          key={zone.zone_name}
-          position={[zone.center_lat, zone.center_lng]}
-        >
-          <Popup>
-            <h3>{zone.zone_name}</h3>
-            <p>Type: {zone.zone_type}</p>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
-  );
+    // Load and add markers for landmarks
+    const { data: landmarks } = await supabase.rpc('get_nagpur_landmarks');
+    landmarks?.forEach(landmark => {
+      new window.google.maps.Marker({
+        position: { lat: landmark.lat, lng: landmark.lng },
+        map,
+        title: landmark.name,
+        icon: getMarkerIcon(landmark.type)
+      });
+    });
+  };
+
+  const getMarkerIcon = (type) => {
+    // Define custom marker icons based on type
+    const icons = {
+      landmark: 'path/to/landmark-icon.png',
+      religious: 'path/to/religious-icon.png',
+      water_body: 'path/to/water-icon.png',
+      historical: 'path/to/historical-icon.png'
+    };
+    return icons[type] || null;
+  };
+
+  return <div ref={mapRef} style={{ height: '100vh', width: '100%' }} />;
 };
 
 export default MapComponent;
