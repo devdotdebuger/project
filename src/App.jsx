@@ -1,5 +1,6 @@
 import MapComponent from './components/Map';
 import ReportForm from './components/ReportForm';
+import Chatbot from './components/Chatbot';
 import './App.css';
 
 function App() {
@@ -7,6 +8,7 @@ function App() {
     <div className="app">
       <MapComponent />
       <ReportForm />
+      <Chatbot />
     </div>
   );
 }
