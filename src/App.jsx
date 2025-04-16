@@ -7,8 +7,10 @@ function App() {
   return (
     <div className="app">
       <MapComponent />
-      <ReportForm />
-      <Chatbot />
+      <div className="overlay-container">
+        <ReportForm />
+        <Chatbot />
+      </div>
     </div>
   );
 }
