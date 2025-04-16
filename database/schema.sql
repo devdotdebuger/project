@@ -2,6 +2,20 @@
 create extension if not exists "vector" with schema public;
 create extension if not exists "postgis" with schema public;
 
+-- Add common validation functions
+CREATE OR REPLACE FUNCTION validate_temperature(temp decimal)
+RETURNS boolean AS $$
+BEGIN
+  RETURN temp BETWEEN -50 AND 70;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add triggers for data validation
+CREATE TRIGGER validate_heat_report_temperature
+  BEFORE INSERT OR UPDATE ON heat_reports
+  FOR EACH ROW
+  EXECUTE FUNCTION check_temperature_range();
+
 -- Profiles table (extends Supabase auth.users)
 create table public.profiles (
   id uuid references auth.users on delete cascade primary key,
@@ -48,6 +62,50 @@ create table public.heat_map_data (
   created_at timestamptz default now()
 );
 
+-- Add archival tables
+CREATE TABLE public.heat_reports_archive (
+  LIKE public.heat_reports,
+  archived_at timestamptz DEFAULT now(),
+  archived_by uuid REFERENCES auth.users(id)
+);
+
+-- Add archiving function
+CREATE OR REPLACE FUNCTION archive_old_heat_reports()
+RETURNS void AS $$
+BEGIN
+  INSERT INTO heat_reports_archive 
+  SELECT *, now(), auth.uid()
+  FROM heat_reports
+  WHERE created_at < now() - interval '1 year';
+  
+  DELETE FROM heat_reports
+  WHERE created_at < now() - interval '1 year';
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create indexes
 create index heat_reports_location_idx on public.heat_reports using gist(location);
 create index heat_map_data_location_idx on public.heat_map_data using gist(location);
+
+-- Add materialized view for analytics
+CREATE MATERIALIZED VIEW heat_statistics AS
+SELECT 
+  date_trunc('day', created_at) as day,
+  avg(temperature) as avg_temp,
+  min(temperature) as min_temp,
+  max(temperature) as max_temp,
+  count(*) as measurements,
+  surface_type
+FROM heat_reports
+GROUP BY date_trunc('day', created_at), surface_type;
+
+-- Add refresh function
+CREATE OR REPLACE FUNCTION refresh_heat_statistics()
+RETURNS void AS $$
+BEGIN
+  REFRESH MATERIALIZED VIEW heat_statistics;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
