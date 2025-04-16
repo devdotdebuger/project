@@ -3,6 +3,7 @@ alter table public.profiles enable row level security;
 alter table public.heat_reports enable row level security;
 alter table public.interventions enable row level security;
 alter table public.heat_map_data enable row level security;
+alter table public.heat_reports_archive enable row level security;
 
 -- Profiles policies
 create policy "Users can view their own profile"
@@ -32,14 +33,30 @@ create policy "Users can delete their own heat reports"
   on public.heat_reports for delete
   using (auth.uid() = user_id);
 
+-- Archive policies
+create policy "Only admins can view archives"
+  on public.heat_reports_archive for select
+  to authenticated
+  using (auth.jwt() ->> 'role' = 'admin');
+
 -- Interventions policies
 create policy "Anyone can view interventions"
   on public.interventions for select
   to authenticated
   using (true);
 
+create policy "Only admins can modify interventions"
+  on public.interventions for all
+  to authenticated
+  using (auth.jwt() ->> 'role' = 'admin');
+
 -- Heat map data policies
 create policy "Anyone can view heat map data"
   on public.heat_map_data for select
   to authenticated
   using (true);
+
+create policy "Only admins can modify heat map data"
+  on public.heat_map_data for all
+  to authenticated
+  using (auth.jwt() ->> 'role' = 'admin');

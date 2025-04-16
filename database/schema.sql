@@ -10,11 +10,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Add temperature range check function
+CREATE OR REPLACE FUNCTION check_temperature_range()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT validate_temperature(NEW.temperature) THEN
+    RAISE EXCEPTION 'Temperature must be between -50°C and 70°C';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Add triggers for data validation
 CREATE TRIGGER validate_heat_report_temperature
   BEFORE INSERT OR UPDATE ON heat_reports
   FOR EACH ROW
   EXECUTE FUNCTION check_temperature_range();
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create custom types
+CREATE TYPE severity_level AS ENUM ('low', 'medium', 'high', 'critical');
+CREATE TYPE land_use_type AS ENUM ('residential', 'commercial', 'industrial', 'park', 'water');
 
 -- Profiles table (extends Supabase auth.users)
 create table public.profiles (
